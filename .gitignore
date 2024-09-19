@@ -1,0 +1,8 @@
+coverage
+dist
+node_modules
+.env
+vite.config.ts.*.mjs
+cache
+*.log
+.idea
