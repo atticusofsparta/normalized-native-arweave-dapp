@@ -3,7 +3,7 @@ import React, { Suspense } from 'react';
 import {
   Route,
   RouterProvider,
-  createBrowserRouter,
+  createHashRouter,
   createRoutesFromElements,
 } from 'react-router-dom';
 
@@ -12,7 +12,7 @@ import NotFound from './pages/NotFound';
 
 const Home = React.lazy(() => import('./pages/Home'));
 
-const sentryCreateBrowserRouter = wrapCreateBrowserRouter(createBrowserRouter);
+const sentryCreateBrowserRouter = wrapCreateBrowserRouter(createHashRouter);
 
 function App() {
   const router = sentryCreateBrowserRouter(

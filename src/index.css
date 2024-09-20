@@ -1,3 +1,13 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background text-white;
+  }
+
+  .modal-container {
+    @apply fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm backdrop-filter scrollbar-thumb-primary;
+  }
+}

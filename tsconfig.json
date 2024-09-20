@@ -10,18 +10,23 @@
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "paths": {
       "@tests/*": ["./tests/*"],
       "@src/*": ["./src/*"]
     }
   },
-  "include": ["src", "types", "tests"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": [
+    "src",
+    "types",
+    "tests",
+    "vite.config.ts",
+    "vite-plugin-raw.d.ts",
+    "lua.d.ts"
+  ]
 }

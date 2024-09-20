@@ -1,5 +1,5 @@
 {
-  "include": ["src", "types"],
+  "include": ["src", "types", "lua.d.ts"],
   "exclude": ["**/*.test.ts", "**/*.test.tsx"],
   "extends": "./tsconfig.json"
 }
