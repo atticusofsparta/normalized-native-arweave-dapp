@@ -33,7 +33,7 @@ function Home() {
 
       // Request the user to sign a message
       if (!publicEncryptionKeyBuffer) {
-        const message = 'sign this message to connect to Bundlr.Network';
+        const message = 'random message to sign';
 
         const signedMessage = await signMessageAsync({
           message,
@@ -105,7 +105,7 @@ function Home() {
           {' '}
           <input
             className="w-full border-b-2 border-primary bg-background p-2 outline-none"
-            placeholder="Enter public key"
+            placeholder="Enter base64url encoded public key (not address, public key!)"
             value={publicKey}
             onChange={(e) => setPublicKey(e.target.value.trim())}
           />
