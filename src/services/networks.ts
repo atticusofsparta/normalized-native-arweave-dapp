@@ -357,10 +357,12 @@ export async function fetchSolanaTransactionBySignature(
     }
 
     const message = tx.transaction.message;
+    // Handle both legacy and versioned transaction message formats
     const accountKeys =
       'staticAccountKeys' in message
         ? message.staticAccountKeys
-        : message.accountKeys;
+        : (message as { accountKeys: import('@solana/web3.js').PublicKey[] })
+            .accountKeys;
 
     if (!accountKeys || accountKeys.length === 0) {
       throw new Error('No account keys found in transaction');
