@@ -51,4 +51,40 @@ export default defineConfig({
       '@src': path.resolve(__dirname) + '/src',
     },
   },
+  server: {
+    proxy: {
+      // Proxy Solana RPC calls to bypass CORS
+      '/solana-rpc': {
+        target:
+          process.env.SOLANA_RPC_URL ||
+          'https://mainnet.helius-rpc.com/?api-key=592512f9-9576-477f-ab29-7cfc9ae7d55c',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/solana-rpc/, ''),
+        secure: true,
+      },
+      '/solana-devnet-rpc': {
+        target: 'https://api.devnet.solana.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/solana-devnet-rpc/, ''),
+        secure: true,
+      },
+      // EVM RPC proxies - set env vars or update these with your API keys
+      '/eth-rpc': {
+        target:
+          process.env.ETH_RPC_URL ||
+          'https://eth-mainnet.g.alchemy.com/v2/h4ykcxQDu4o3DzFV_X5ZS',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/eth-rpc/, ''),
+        secure: true,
+      },
+      '/polygon-rpc': {
+        target:
+          process.env.POLYGON_RPC_URL ||
+          'https://polygon-mainnet.g.alchemy.com/v2/demo',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/polygon-rpc/, ''),
+        secure: true,
+      },
+    },
+  },
 });
