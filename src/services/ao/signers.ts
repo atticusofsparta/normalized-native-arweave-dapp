@@ -2,7 +2,15 @@ import { connect } from '@permaweb/aoconnect';
 import { EthereumSigner, InjectedEthereumSigner, createData } from 'arbundles';
 import { BrowserProvider } from 'ethers';
 
-const ethersProvider = new BrowserProvider(window?.ethereum);
+// Lazy initialization - only create provider when needed
+function getEthersProvider(): BrowserProvider {
+  if (typeof window === 'undefined' || !window.ethereum) {
+    throw new Error(
+      'No Ethereum wallet detected. Please install MetaMask or another Web3 wallet.',
+    );
+  }
+  return new BrowserProvider(window.ethereum);
+}
 
 /**
  * @param ethersProvider - BrowserProvider
@@ -58,6 +66,7 @@ export function createBrowserEthereumDataItemSigner(
 const ao = connect();
 
 export async function spawn() {
+  const ethersProvider = getEthersProvider();
   // connect to metamask
   await ethersProvider.send('eth_requestAccounts', []);
   const dataItemSigner = createBrowserEthereumDataItemSigner(ethersProvider);

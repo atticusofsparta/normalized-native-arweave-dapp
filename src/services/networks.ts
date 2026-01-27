@@ -104,6 +104,36 @@ function getEvmClient(chain: Chain) {
   });
 }
 
+// Helper to extract recovery bit from v value based on transaction type
+function getRecoveryBit(v: bigint, chainId: number): number {
+  console.log('[getRecoveryBit] Input v:', v.toString(), 'chainId:', chainId);
+
+  // EIP-1559 and EIP-2930 transactions: v is already 0 or 1
+  if (v === 0n || v === 1n) {
+    console.log(
+      '[getRecoveryBit] EIP-1559/2930 detected, recoveryBit:',
+      Number(v),
+    );
+    return Number(v);
+  }
+
+  // Pre-EIP-155 legacy transactions: v is 27 or 28
+  if (v === 27n || v === 28n) {
+    console.log(
+      '[getRecoveryBit] Pre-EIP-155 detected, recoveryBit:',
+      Number(v - 27n),
+    );
+    return Number(v - 27n);
+  }
+
+  // EIP-155 transactions: v = chainId * 2 + 35 + recoveryBit
+  // recoveryBit = (v - 35 - chainId * 2) which simplifies to (v - 35) % 2
+  const recoveryBit = (v - 35n) % 2n;
+  const result = Number(recoveryBit < 0n ? recoveryBit + 2n : recoveryBit);
+  console.log('[getRecoveryBit] EIP-155 detected, recoveryBit:', result);
+  return result;
+}
+
 // Helper to recover public key from an EVM transaction
 async function recoverPublicKeyFromEvmTx(
   tx: {
@@ -122,42 +152,137 @@ async function recoverPublicKeyFromEvmTx(
     maxPriorityFeePerGas?: bigint;
     gasPrice?: bigint;
     type?: string;
+    accessList?: readonly {
+      address: `0x${string}`;
+      storageKeys: readonly `0x${string}`[];
+    }[];
   },
   chainId: number,
 ): Promise<TransactionInfo | null> {
-  const txForSigning: TransactionSerializable = {
-    to: tx.to,
-    value: tx.value,
-    gas: tx.gas,
-    nonce: tx.nonce,
-    data: tx.input,
-    chainId,
-    ...(tx.type === 'eip1559' || tx.maxFeePerGas
-      ? {
-          maxFeePerGas: tx.maxFeePerGas,
-          maxPriorityFeePerGas: tx.maxPriorityFeePerGas,
-          type: 'eip1559' as const,
-        }
-      : {
-          gasPrice: tx.gasPrice,
-          type: 'legacy' as const,
-        }),
-  };
+  console.log('\n=== recoverPublicKeyFromEvmTx ===');
+  console.log('[TX] Hash:', tx.hash);
+  console.log('[TX] From:', tx.from);
+  console.log('[TX] Type:', tx.type);
+  console.log('[TX] Nonce:', tx.nonce);
+  console.log('[TX] To:', tx.to);
+  console.log('[TX] Value:', tx.value?.toString());
+  console.log('[TX] Gas:', tx.gas?.toString());
+  console.log('[TX] GasPrice:', tx.gasPrice?.toString());
+  console.log('[TX] MaxFeePerGas:', tx.maxFeePerGas?.toString());
+  console.log(
+    '[TX] MaxPriorityFeePerGas:',
+    tx.maxPriorityFeePerGas?.toString(),
+  );
+  console.log('[TX] Input (first 100 chars):', tx.input?.slice(0, 100));
+  console.log('[TX] v:', tx.v?.toString());
+  console.log('[TX] r:', tx.r);
+  console.log('[TX] s:', tx.s);
+  console.log('[TX] ChainId:', chainId);
+
+  // Determine transaction type and build the appropriate object
+  let txForSigning: TransactionSerializable;
+  let detectedType: string;
+
+  if (tx.type === 'eip1559' || tx.maxFeePerGas !== undefined) {
+    detectedType = 'eip1559';
+    txForSigning = {
+      to: tx.to,
+      value: tx.value,
+      gas: tx.gas,
+      nonce: tx.nonce,
+      data: tx.input,
+      chainId,
+      maxFeePerGas: tx.maxFeePerGas,
+      maxPriorityFeePerGas: tx.maxPriorityFeePerGas,
+      accessList: tx.accessList,
+      type: 'eip1559' as const,
+    };
+  } else if (tx.type === 'eip2930' || tx.accessList !== undefined) {
+    detectedType = 'eip2930';
+    txForSigning = {
+      to: tx.to,
+      value: tx.value,
+      gas: tx.gas,
+      nonce: tx.nonce,
+      data: tx.input,
+      chainId,
+      gasPrice: tx.gasPrice,
+      accessList: tx.accessList,
+      type: 'eip2930' as const,
+    };
+  } else {
+    detectedType = 'legacy';
+    txForSigning = {
+      to: tx.to,
+      value: tx.value,
+      gas: tx.gas,
+      nonce: tx.nonce,
+      data: tx.input,
+      chainId,
+      gasPrice: tx.gasPrice,
+      type: 'legacy' as const,
+    };
+  }
+
+  console.log('[DETECTED TYPE]:', detectedType);
+  console.log(
+    '[TX FOR SIGNING]:',
+    JSON.stringify(
+      txForSigning,
+      (_, v) => (typeof v === 'bigint' ? v.toString() : v),
+      2,
+    ),
+  );
 
   const serialized = serializeTransaction(txForSigning);
+  console.log('[SERIALIZED TX (first 200 chars)]:', serialized.slice(0, 200));
+
   const hash = keccak256(serialized);
+  console.log('[KECCAK256 HASH]:', hash);
 
   if (tx.v !== undefined && tx.r && tx.s) {
-    const signature =
-      `${tx.r}${tx.s.slice(2)}${tx.v % 2n === 0n ? '1c' : '1b'}` as Hash;
+    // Get recovery bit (0 or 1) from v value
+    const recoveryBit = getRecoveryBit(tx.v, chainId);
+    // Convert to signature format: 0 -> '1b' (27), 1 -> '1c' (28)
+    const vHex = recoveryBit === 0 ? '1b' : '1c';
+
+    // Pad r and s to 64 hex characters each (32 bytes) - they may have leading zeros stripped
+    const rHex = tx.r.slice(2).padStart(64, '0');
+    const sHex = tx.s.slice(2).padStart(64, '0');
+    console.log('[R HEX] (padded):', rHex, 'length:', rHex.length);
+    console.log('[S HEX] (padded):', sHex, 'length:', sHex.length);
+
+    const signature = `0x${rHex}${sHex}${vHex}` as Hash;
+    console.log('[SIGNATURE]:', signature);
+    console.log(
+      '[SIGNATURE LENGTH]:',
+      signature.length,
+      '(should be 132: 0x + 64 + 64 + 2)',
+    );
+    console.log('[V HEX]:', vHex);
 
     const recoveredKey = await recoverPublicKey({
       hash,
       signature,
     });
+    console.log('[RECOVERED PUBLIC KEY]:', recoveredKey);
+    console.log(
+      '[PUBLIC KEY LENGTH]:',
+      recoveredKey.length,
+      'chars (should be 132 for uncompressed)',
+    );
 
     const publicKeyBuffer = Buffer.from(recoveredKey.slice(2), 'hex');
+    console.log(
+      '[PUBLIC KEY BUFFER LENGTH]:',
+      publicKeyBuffer.length,
+      'bytes (should be 65 for uncompressed)',
+    );
+    console.log('[PUBLIC KEY BUFFER HEX]:', publicKeyBuffer.toString('hex'));
+
     const normalizedAddress = sha256B64Url(publicKeyBuffer);
+    console.log('[NORMALIZED ADDRESS]:', normalizedAddress);
+    console.log('=================================\n');
 
     return {
       hash: tx.hash,
